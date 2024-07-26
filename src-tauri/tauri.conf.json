@@ -6,17 +6,36 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "tauri-app",
-    "version": "0.0.0"
+    "productName": "Casa_Alta_Imoveis",
+    "version": "1.0.0"
   },
   "tauri": {
     "allowlist": {
       "all": false,
       "shell": {
+        "all": true
+      },
+      "dialog": {
+        "all": true
+      },
+      "fs": {
         "all": false,
-        "open": true
+        "readFile": true, 
+        "writeFile": true,
+        "exists":true,
+        "scope": [
+          "$HOME/documents/**",
+          "$APPDIR/data/**",
+          "$APPDATA/**",
+          "$APPLOCALDATA/**"
+        ]      
+      },
+      "path":{
+        "all": true
       }
-    },
+     
+    
+  },
     "windows": [
       { "label":"main", 
         "title": "Casa Alta",
@@ -32,7 +51,7 @@
     "bundle": {
       "active": true,
       "targets": "all",
-      "identifier": "com.tauri.dev",
+      "identifier": "com.tauri.imobiliariacasaalta",
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",

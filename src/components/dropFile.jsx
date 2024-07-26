@@ -9,7 +9,7 @@ import { appLocalDataDir } from "@tauri-apps/api/path";
 import { fs } from "@tauri-apps/api";
 import AlertDialog from "./alertDialog";
 import { BaseDirectory } from "@tauri-apps/api/fs";
-export default function DropFile({onCompiladoGerado, onCompleteSheets}) {
+export default function DropFile({ onCompiladoGerado, onCompleteSheets, onLoadOldFile }) {
 
 
     const [showDialog, setShowDialog] = useState(false);
@@ -19,14 +19,17 @@ export default function DropFile({onCompiladoGerado, onCompleteSheets}) {
     const [hadImoveis, setHadImoveis] = useState(null);
     const [hadVisitas, setHadVisitas] = useState(null);
     const [hadAnuncios, setHadAnuncios] = useState(null);
+    const [hadOldFile, setHadOldFile] = useState(null);
     const [fileImoveis, setFileImoveis] = useState("");
+    const [fileAnuncios, setFileAnuncios] = useState("");
+    const [fileVisitas, setFileVisitas] = useState("");
+    const [fileOld, setFileOld] = useState("");
 
 
-   
+
     useEffect(() => {
         if (hadImoveis && hadVisitas && hadAnuncios) {
             onCompleteSheets(true);
-
             let comp = []
 
             hadImoveis.forEach((item) => {
@@ -40,15 +43,19 @@ export default function DropFile({onCompiladoGerado, onCompleteSheets}) {
                     locacao: item.r_locacao,
                     criacao: item.data_de_cadastro,
                     ultimaAtualizacao: item.data_de_atualizacao,
-                    
+                    area: item.area,
+                    vendaPorM2: item.r_venda/item.area,
+                    locacaoPorM2: item.r_locacao/item.area,
+
+
                 }
                 let anunc = hadAnuncios.filter((item) => { return item.codigo_do_imovel === reg.referencia });
 
                 if (anunc.length > 0) {
                     reg.visualizacoes = anunc[0].total_de_visualizacoes;
                     reg.contatos = anunc[0].total_de_contatos;
-                    
-                    
+
+
                 }
                 else {
                     reg.visualizacoes = 0;
@@ -56,7 +63,7 @@ export default function DropFile({onCompiladoGerado, onCompleteSheets}) {
                 }
 
                 let visitas = hadVisitas.filter((item) => { return item.ref_imovel == reg.referencia });
-            
+
                 reg.numVisitas = 0;
                 reg.visitasConcluidas = 0;
                 reg.visitasCanceladas = 0;
@@ -91,18 +98,18 @@ export default function DropFile({onCompiladoGerado, onCompleteSheets}) {
                         if (vis.interesse.toLowerCase() === "não interessou") {
                             reg.naoInteressou++;
                         }
-                        if (parseInt(vis.avaliacao_do_imovel_pelo_cliente_de_1_a_5__conservacao) != NaN) {
+                        if (!isNaN(parseInt(vis.avaliacao_do_imovel_pelo_cliente_de_1_a_5__conservacao))) {
                             reg.totalConservacao += vis.avaliacao_do_imovel_pelo_cliente_de_1_a_5__conservacao;
 
                         }
-                        if (parseInt(vis.avaliacao_do_imovel_pelo_cliente_de_1_a_5__localizacao) != NaN) {
+                        if (!isNaN(parseInt(vis.avaliacao_do_imovel_pelo_cliente_de_1_a_5__localizacao))) {
 
 
                             reg.totalLocalizacao += vis.avaliacao_do_imovel_pelo_cliente_de_1_a_5__localizacao;
                         }
 
 
-                        if (parseInt(vis.avaliacao_do_imovel_pelo_cliente_de_1_a_5__valor) != NaN) {
+                        if (isNaN(parseInt(vis.avaliacao_do_imovel_pelo_cliente_de_1_a_5__valor))) {
                             reg.totalAvaliacao += vis.avaliacao_do_imovel_pelo_cliente_de_1_a_5__valor;
 
                         }
@@ -112,7 +119,7 @@ export default function DropFile({onCompiladoGerado, onCompleteSheets}) {
                 if (reg.visitasConcluidas > 0) {
                     reg.mediaConsevacao = reg.totalConservacao / reg.visitasConcluidas;
                 }
-                else{
+                else {
                     reg.mediaConsevacao = 0;
                 }
 
@@ -120,34 +127,31 @@ export default function DropFile({onCompiladoGerado, onCompleteSheets}) {
                 if (reg.visitasConcluidas > 0) {
                     reg.mediaLocalizacao = reg.totalLocalizacao / reg.visitasConcluidas;
                 }
-                else{
+                else {
                     reg.mediaLocalizacao = 0;
                 }
                 if (reg.visitasConcluidas > 0) {
                     reg.mediaAvaliacao = reg.totalAvaliacao / reg.visitasConcluidas;
                 }
-                else{
+                else {
                     reg.mediaAvaliacao = 0;
                 }
                 reg.avaliacaoSubjetiva = 0;
-                
-                
+
+
                 comp.push(reg);
 
             })
 
-   
+
 
 
             console.log(comp);
             onCompiladoGerado(comp)
-   
+
         }
-        else {
-            onCompleteSheets(false);
-        }
-        
- 
+
+
 
 
     }, [hadImoveis, hadVisitas, hadAnuncios]);
@@ -159,7 +163,7 @@ export default function DropFile({onCompiladoGerado, onCompleteSheets}) {
             setFileAnuncios(file.split("\\")[file.split("\\").length - 1]);
             invoke("read_sheet_to_hash_vector", { path: file, sheetName: sheet }).then((res) => {
                 const data = JSON.parse(res);
-           
+
                 setHadAnuncios(data);
             }).catch((err) => {
                 console.log(err);
@@ -194,10 +198,23 @@ export default function DropFile({onCompiladoGerado, onCompleteSheets}) {
             })
             return;
         }
+        if (sheet === "Ranking") {
+            setFileOld(file.split("\\")[file.split("\\").length - 1]);
+            invoke("read_sheet_to_hash_vector", { path: file, sheetName: sheet }).then((res) => {
+                const data = JSON.parse(res);
+                onLoadOldFile(data);
+                setHadOldFile(data);
+            }).catch((err) => {
+                console.log(err);
+            })
+
+            return;
+        }
 
 
     }
     const handleClickDrop = () => {
+
         if (!showDialog) {
 
 
@@ -221,15 +238,17 @@ export default function DropFile({onCompiladoGerado, onCompleteSheets}) {
                                 }).then((res) => {
                                     const lastIndex = res.lastIndexOf("\\")
                                     const path = res.substring(0, lastIndex + 1)
-                                    const config = {
-                                        lastPath: path
-                                    }
-                                    fs.writeFile(`${folder}config.json`, JSON.stringify(config), { dir: BaseDirectory.AppLocalData }).then((res) => {
-                                        console.log("Arquivo de configuração criado com sucesso")
-
-
+                                    fs.readTextFile(`${folder}config.json`).then((config) => {
+                                        const configJson = JSON.parse(config);
+                                        configJson.lastPath = path;
+                                        fs.writeFile(`${folder
+                                            }config.json`, JSON.stringify(configJson), { dir: BaseDirectory.AppLocalData }).then((res) => {
+                                                console.log("Arquivo de configuração criado com sucesso")
+                                            }).catch((err) => {
+                                                console.log(err)
+                                            })
                                     }).catch((err) => {
-                                        console.log(err)
+                                        console.log(err);
                                     })
                                     invoke("get_sheets_names", { dir: res }).then((sheets) => {
                                         const sheets_json = JSON.parse(sheets);
@@ -320,7 +339,6 @@ export default function DropFile({onCompiladoGerado, onCompleteSheets}) {
 
     useEffect(() => {
 
-
         listen("tauri://file-drop", handleDragOver);
 
     }, []);
@@ -345,12 +363,21 @@ export default function DropFile({onCompiladoGerado, onCompleteSheets}) {
                             <img src={hadVisitas ? "img/archive.png" : "img/no_archive.png"} alt="Visitas" width={'70%'} />
                         </div>
                         <div className="w-full text-center">Visitas</div>
+                        <div className="w-full text-xs text-center"> {fileVisitas}</div>
                     </div>
                     <div id="dropzap" className="border">
                         <div className=" flex justify-center">
                             <img src={hadAnuncios ? "img/archive.png" : "img/no_archive.png"} alt="Zap" width={'70%'} />
                         </div>
                         <div className="w-full text-center">Zap</div>
+                        <div className="w-full text-xs text-center"> {fileAnuncios}</div>
+                    </div>
+                    <div id="dropold" className="border">
+                        <div className=" flex justify-center">
+                            <img src={hadOldFile ? "img/archive.png" : "img/no_archive.png"} alt="Old" width={'70%'} />
+                        </div>
+                        <div className="w-full text-center">Ultimo Excel</div>
+                        <div className="w-full text-xs text-center"> {fileOld}</div>
                     </div>
 
 

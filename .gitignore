@@ -1,6 +1,10 @@
 # Logs
 logs
 *.log
+*.xlsx
+*.xls
+*.csv
+*.xlsm
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

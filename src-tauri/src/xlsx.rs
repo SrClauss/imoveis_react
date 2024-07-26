@@ -3,9 +3,31 @@ pub mod xlsx {
     use serde_json::{json, Value};
     use std::collections::HashMap;
     use unicode_normalization::UnicodeNormalization;
+    use xlsxwriter::*;
     
     
 
+    fn convert_camel_case_to_string(camel_case: &str) -> String {
+        let mut result = String::new();
+    
+        //primeira letra sempre maiúscula
+        result.push(camel_case.chars().next().unwrap().to_uppercase().next().unwrap());
+        //iterar sobre os caracteres
+        for c in camel_case.chars().skip(1) {
+            //se o caractere for maiúsculo, adicione um espaço e o caractere em minúsculo
+            if c.is_uppercase() {
+                result.push(' ');
+                result.push(c.to_lowercase().next().unwrap());
+            } else {
+                //caso contrário, adicione o caractere
+                result.push(c);
+            }
+        }
+    
+       
+        return result;
+    }
+    
    fn convert_string_in_keys(string: &str) -> Option<String> {
         let mut result = String::new();
         for c in string.chars() {
@@ -55,6 +77,65 @@ pub mod xlsx {
     }
    
 
+
+    #[tauri::command]
+    pub fn save_xlsx(data: String, path: String) -> Result<(), String>{
+    
+        let data_json: Result<Vec<HashMap<String, Value>>, serde_json::Error> = serde_json::from_str(data.as_str());
+        if let Err(_) = data_json {
+            return Err("Erro ao parsear os dados".to_string());
+        }
+        let data_json = data_json.unwrap();
+        if data_json.is_empty() {
+            return Err("Nenhum dado encontrado".to_string());
+        }
+        let workbook = Workbook::new(path.as_str()).unwrap();
+    
+        let mut worksheet = workbook.add_worksheet(Some("Ranking")).unwrap();
+    
+        let headers: Vec<&str> = data_json.first().unwrap().keys().map(|s| s.as_str()).collect();
+        for (i, header) in headers.iter().enumerate() {
+            worksheet.write_string(0, i as u16, &convert_camel_case_to_string(&header), Some(&Format::new().set_bold())).unwrap();
+        }
+        //itera sobre data json e para cara item, escreva uma linha com os values correspondentes
+        let data_json_len = data_json.len();
+        for i in 1..(data_json_len + 1){
+    
+            let item = &data_json[i - 1];
+            for (j, header) in headers.iter().enumerate() {
+                let value = item.get(*header).unwrap();
+                match value {
+                    Value::String(str) => {
+                        worksheet.write_string(i as u32, j as u16, str.as_str(), None).unwrap();
+                    }
+                    Value::Number(num) => {
+                        worksheet.write_number(i as u32, j as u16, num.as_f64().unwrap(), None).unwrap();
+                    }
+                    Value::Bool(b) => {
+                        worksheet.write_boolean(i as u32, j as u16, *b, None).unwrap();
+                    }
+                    _ => {
+                        worksheet.write_blank(i as u32, j as u16, None).unwrap();
+                    }
+                }
+            }
+    
+        }
+    
+       
+        let save_result = workbook.close();
+        if let Err(_) = save_result {
+            return Err("Erro ao salvar o arquivo".to_string());
+        }
+        
+    
+        Ok(())
+    
+    
+    }
+    
+
+
     #[tauri::command]
     pub fn read_excel_to_hash_vector(path: &str) -> String {
         let mut result: Vec<Vec<HashMap<String, Value>>> = Vec::new();
@@ -62,7 +143,7 @@ pub mod xlsx {
         let mut workbook: calamine::Sheets<std::io::BufReader<std::fs::File>> =
             match open_workbook_auto(path) {
                 Ok(workbook) => workbook,
-                Err(e) => return "{\"error\": \"Erro ao ler workbook\"}".to_string(),
+                Err(e)=> return format!("\"Error\": {}", e)
             };
         let sheets: Vec<String> = workbook.sheet_names().to_vec();
 
@@ -121,12 +202,11 @@ pub mod xlsx {
     }
     #[tauri::command]
     pub fn read_sheet_to_hash_vector(path: &str, sheet_name: &str) -> String {
-        let mut result: Vec<Vec<HashMap<String, Value>>> = Vec::new();
-
+        
         let mut workbook: calamine::Sheets<std::io::BufReader<std::fs::File>> =
             match open_workbook_auto(path) {
                 Ok(workbook) => workbook,
-                Err(e) => return "{\"error\": \"Erro ao ler workbook\"}".to_string(),
+                Err(e) => return format!("\"Error\": {}", e)
             };
         let sheet = workbook.worksheet_range(sheet_name);
         if sheet.is_err() {
@@ -177,8 +257,8 @@ pub mod xlsx {
         json!(sheet_data_json).to_string()
 
 
-    }
-
+    } 
+    
 
     #[tauri::command]
     pub fn get_sheets_names(dir: &str) -> Result<String, String>{
@@ -194,7 +274,7 @@ pub mod xlsx {
 
 
         
-        let mut workbook: calamine::Sheets<std::io::BufReader<std::fs::File>> =
+        let workbook: calamine::Sheets<std::io::BufReader<std::fs::File>> =
             match open_workbook_auto(dir) {
                 Ok(workbook) => workbook,
                 Err(e) => return Err(format!("{}", e))
