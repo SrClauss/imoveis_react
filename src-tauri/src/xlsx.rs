@@ -80,6 +80,10 @@ pub mod xlsx {
 
     #[tauri::command]
     pub fn save_xlsx(data: String, path: String) -> Result<(), String>{
+
+
+
+        
     
         let data_json: Result<Vec<HashMap<String, Value>>, serde_json::Error> = serde_json::from_str(data.as_str());
         if let Err(_) = data_json {
@@ -100,10 +104,10 @@ pub mod xlsx {
         //itera sobre data json e para cara item, escreva uma linha com os values correspondentes
         let data_json_len = data_json.len();
         for i in 1..(data_json_len + 1){
-    
             let item = &data_json[i - 1];
+
             for (j, header) in headers.iter().enumerate() {
-                let value = item.get(*header).unwrap();
+                let value = item.get(*header).unwrap();               
                 match value {
                     Value::String(str) => {
                         worksheet.write_string(i as u32, j as u16, str.as_str(), None).unwrap();
@@ -122,7 +126,6 @@ pub mod xlsx {
     
         }
     
-       
         let save_result = workbook.close();
         if let Err(_) = save_result {
             return Err("Erro ao salvar o arquivo".to_string());

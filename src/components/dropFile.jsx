@@ -25,11 +25,9 @@ export default function DropFile({ onCompiladoGerado, onCompleteSheets, onLoadOl
     const [fileVisitas, setFileVisitas] = useState("");
     const [fileOld, setFileOld] = useState("");
 
-
-
     useEffect(() => {
         if (hadImoveis && hadVisitas && hadAnuncios) {
-            onCompleteSheets(true);
+          
             let comp = []
 
             hadImoveis.forEach((item) => {
@@ -46,12 +44,17 @@ export default function DropFile({ onCompiladoGerado, onCompleteSheets, onLoadOl
                     area: item.area,
                     vendaPorM2: item.r_venda/item.area,
                     locacaoPorM2: item.r_locacao/item.area,
+                    tipoDoAnuncio: "",
+                    dormitorios: item.dormitorios,
+                    finalidade: item.finalidade,
+                    endereco: item.endereco,
 
 
                 }
                 let anunc = hadAnuncios.filter((item) => { return item.codigo_do_imovel === reg.referencia });
 
                 if (anunc.length > 0) {
+                    reg.tipoDoAnuncio =anunc[0].tipo_do_anuncio;
                     reg.visualizacoes = anunc[0].total_de_visualizacoes;
                     reg.contatos = anunc[0].total_de_contatos;
 
@@ -63,7 +66,6 @@ export default function DropFile({ onCompiladoGerado, onCompleteSheets, onLoadOl
                 }
 
                 let visitas = hadVisitas.filter((item) => { return item.ref_imovel == reg.referencia });
-
                 reg.numVisitas = 0;
                 reg.visitasConcluidas = 0;
                 reg.visitasCanceladas = 0;
@@ -146,7 +148,7 @@ export default function DropFile({ onCompiladoGerado, onCompleteSheets, onLoadOl
 
 
 
-            console.log(comp);
+            onCompleteSheets(true);
             onCompiladoGerado(comp)
 
         }

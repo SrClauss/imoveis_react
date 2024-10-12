@@ -4,42 +4,28 @@ mod xlsx;
 use chrono::NaiveDate;
 use mouse_rs::Mouse;
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, hash::Hash};
+use tauri::{api::path::app_local_data_dir, utils::config};
 use xlsx::xlsx::{
     get_sheets_names, read_excel_to_hash_vector, read_sheet_to_hash_vector, save_xlsx,
 };
-
+#[derive(Debug)]
 struct Peso {
-    ativo: f32,
+    cont_tipo_bairro_dormitorio: f32,
     cont_tipo_bairro: f32,
     cont_bairro: f32,
+    cont_dormitorio_bairro: f32,
     diminuiu_preco: f32,
     visualizacoes: f32,
     novo: f32,
-    atualizado: f32,
     contatos: f32,
     visitas: f32,
-    visitas_concluidas: f32,
-    visitas_canceladas: f32,
-    visitas_aguardando: f32,
-    interessou: f32,
-    interessou_gerou_proposta: f32,
-    total_conservacao: f32,
-    media_conservacao: f32,
-    total_localizacao: f32,
-    media_localizacao: f32,
-    total_avaliacao: f32,
-    media_avaliacao: f32,
-    avaliacao_subjetiva: f32,
     venda_por_m2: f32,
     locacao_por_m2: f32,
 }
-
 impl Peso {
     fn new_from_strignify(json_str: String) -> Self {
         let json: Value = serde_json::from_str(json_str.as_str()).unwrap();
-        println!("{:?}", json);
-
         fn parse_f32(value: &Value) -> f32 {
             value
                 .as_str()
@@ -48,46 +34,24 @@ impl Peso {
         }
 
         Peso {
-            ativo: parse_f32(&json["ativo"]),
+
+            cont_tipo_bairro_dormitorio: parse_f32(&json["cont_tipo_bairro_dormitorio"]),
+            cont_dormitorio_bairro: parse_f32(&json["cont_tipo_dormitorio"]),
             cont_tipo_bairro: parse_f32(&json["cont_tipo_bairro"]),
             cont_bairro: parse_f32(&json["cont_bairro"]),
             diminuiu_preco: parse_f32(&json["diminuiu_preco"]),
             visualizacoes: parse_f32(&json["visualizacoes"]),
             novo: parse_f32(&json["novo"]),
-            atualizado: parse_f32(&json["atualizado"]),
             contatos: parse_f32(&json["contatos"]),
             visitas: parse_f32(&json["visitas"]),
-            visitas_concluidas: parse_f32(&json["visitas_concluidas"]),
-            visitas_canceladas: parse_f32(&json["visitas_canceladas"]),
-            visitas_aguardando: parse_f32(&json["visitas_aguardando"]),
-            interessou: parse_f32(&json["interessou"]),
-            interessou_gerou_proposta: parse_f32(&json["interessou_gerou_proposta"]),
-            total_conservacao: parse_f32(&json["total_conservacao"]),
-            media_conservacao: parse_f32(&json["media_conservacao"]),
-            total_localizacao: parse_f32(&json["total_localizacao"]),
-            media_localizacao: parse_f32(&json["media_localizacao"]),
-            total_avaliacao: parse_f32(&json["total_avaliacao"]),
-            media_avaliacao: parse_f32(&json["media_avaliacao"]),
-            avaliacao_subjetiva: parse_f32(&json["avaliacao_subjetiva"]),
             venda_por_m2: parse_f32(&json["venda_por_m2"]),
             locacao_por_m2: parse_f32(&json["locacao_por_m2"]),
         }
     }
 }
-struct Configuracao {
-    maximo_imovel_novo: i32,
-    maximo_imovel_atualizado: i32,
-}
-impl Configuracao {
-    fn new(minimo_imovel_novo: i32, minimo_imovel_atualizado: i32) -> Self {
-        return Configuracao {
-            maximo_imovel_novo: minimo_imovel_novo,
-            maximo_imovel_atualizado: minimo_imovel_atualizado,
-        };
-    }
-}
 
-fn get_criterio_bairo(data: &Vec<HashMap<String, Value>>) -> HashMap<String, f32> {
+
+fn get_criterio_bairro(data: &Vec<HashMap<String, Value>>) -> HashMap<String, f32> {
     //crie um hashmap para armazenar o critério de bairro
     let mut criterio_bairro = HashMap::new();
     //crie um set para armazenar os bairros
@@ -185,6 +149,122 @@ fn get_criterio_bairro_tipo_imovel(data: &Vec<HashMap<String, Value>>) -> HashMa
     }
     return criterio_bairro_tipo_imovel;
 }
+fn get_criterio_dormitorio_bairro(data: &Vec<HashMap<String, Value>>) -> HashMap<String, f32>{
+    let mut criterio_bairro_dormitorios: HashMap<String, f32> = HashMap::new();
+    let mut bairros_dormitorios: HashSet<String> = std::collections::HashSet::new();
+    for item in data{
+
+        let bairro = item.get("bairro");
+        if bairro.is_none(){
+            continue;
+        }
+        let bairro = bairro.unwrap().as_str();
+        if bairro.is_none(){
+            continue;
+        }
+        let bairro = bairro.unwrap();
+        let dormitorios = item.get("dormitorios");
+        if dormitorios.is_none(){
+            continue;
+        }
+        let dormitorios = dormitorios.unwrap().as_f64().unwrap() as i32;
+        let bairro_dormitorios = format!("{}_{}", dormitorios, bairro);
+        bairros_dormitorios.insert(bairro_dormitorios);
+
+
+    }
+    for bairro_dormitorio in bairros_dormitorios{
+        criterio_bairro_dormitorios.insert(bairro_dormitorio.to_string(), 0.0);
+    }
+
+    
+    for item in data{
+        let bairro = item.get("bairro");
+        if bairro.is_none(){
+            continue;
+        }
+        let bairro = bairro.unwrap().as_str();
+        if bairro.is_none(){
+            continue;
+        }
+        let bairro = bairro.unwrap();
+        let dormitorios = item.get("dormitorios");
+        if dormitorios.is_none(){
+            continue;
+        }
+        let dormitorios = dormitorios.unwrap().as_f64().unwrap() as i32;
+        let bairro_dormitorios = format!("{}_{}", dormitorios, bairro);
+        let contador = criterio_bairro_dormitorios.get_mut(&bairro_dormitorios).unwrap();
+        *contador += 1.0;
+    }
+ 
+    return criterio_bairro_dormitorios;
+
+
+}
+fn get_criterio_tipo_bairro_dormitorio(data: &Vec<HashMap<String, Value>>) -> HashMap<String, f32> {
+    let mut criterio_tipo_bairro_dormitorio = HashMap::new();
+    let mut tipos_bairro_dormitorios: HashSet<String> = std::collections::HashSet::new();
+    for item in data {
+        let bairro = item.get("bairro");
+        if bairro.is_none() {
+            continue;
+        }
+        let bairro = bairro.unwrap().as_str();
+        if bairro.is_none() {
+            continue;
+        }
+        let bairro = bairro.unwrap();
+        let dormitorios = item.get("dormitorios");
+        if dormitorios.is_none() {
+            continue;
+        }
+        let dormitorios = dormitorios.unwrap().as_f64().unwrap() as i32;
+        let tipo = item.get("tipo");
+        if tipo.is_none() {
+            continue;
+        }
+        let tipo = tipo.unwrap().as_str();
+        if tipo.is_none() {
+            continue;
+        }
+        let tipo = tipo.unwrap();
+        let tipo_bairro_dormitorios = format!("{}_{}_{}", tipo, bairro, dormitorios);
+        tipos_bairro_dormitorios.insert(tipo_bairro_dormitorios);
+    }
+    for tipo_bairro_dormitorios in tipos_bairro_dormitorios {
+        criterio_tipo_bairro_dormitorio.insert(tipo_bairro_dormitorios.to_string(), 0.0);
+    }
+    for item in data {
+        let bairro = item.get("bairro");
+        if bairro.is_none() {
+            continue;
+        }
+        let bairro = bairro.unwrap().as_str();
+        if bairro.is_none() {
+            continue;
+        }
+        let bairro = bairro.unwrap();
+        let dormitorios = item.get("dormitorios");
+        if dormitorios.is_none() {
+            continue;
+        }
+        let dormitorios = dormitorios.unwrap().as_f64().unwrap() as i32;
+        let tipo = item.get("tipo");
+        if tipo.is_none() {
+            continue;
+        }
+        let tipo = tipo.unwrap().as_str();
+        if tipo.is_none() {
+            continue;
+        }
+        let tipo = tipo.unwrap();
+        let tipo_bairro_dormitorios = format!("{}_{}_{}", tipo, bairro, dormitorios);
+        let contador = criterio_tipo_bairro_dormitorio.get_mut(&tipo_bairro_dormitorios).unwrap();
+        *contador += 1.0;
+    }
+    return criterio_tipo_bairro_dormitorio;
+}
 #[tauri::command]
 fn get_mouse_position(wx: i32, wy: i32) -> String {
     let mouse = Mouse::new();
@@ -194,555 +274,242 @@ fn get_mouse_position(wx: i32, wy: i32) -> String {
     return format!("{{\"x\": {}, \"y\": {}}}", x, y);
 }
 #[tauri::command]
+fn get_config()->HashMap<String, Value>{
+    let identifier = "com.tauri.imobiliariacasaalta";
+    let config = config::Config::default();
+    let path = app_local_data_dir(&config).unwrap();
+    //como juntar o path com o identifier
+    let path = path.join(identifier);
+    let path = path.join("config.json");
+    let path = path.to_str().unwrap();
+
+    let config = std::fs::read_to_string(path);
+    if config.is_err() {
+        return HashMap::new();
+    }
+    let config = config.unwrap();
+    let config: HashMap<String, Value> = serde_json::from_str(config.as_str()).unwrap();
+    let config = config.get("config").unwrap().as_object().unwrap();
+    let mut result_hashmap: HashMap<String, Value> = HashMap::new();
+    for (key, value) in config {
+        result_hashmap.insert(key.to_string(), value.clone());
+    }
+
+
+    return result_hashmap;
+
+
+    
+
+
+    
+
+    
+}
+#[tauri::command]
 fn classify(
     data: String,
     old_data: String,
     peso: String,
-    max_ativo: i32,
-    max_novo: i32,
-) -> Result<String, String> {
+) -> Result<String, String>{
+
+
     let data_json: Result<Vec<HashMap<String, Value>>, serde_json::Error> =
         serde_json::from_str(data.as_str());
     if data_json.is_err() {
         return Err("Erro ao parsear os dados".to_string());
     }
+    let data_json = data_json.unwrap();
 
-    let mut data_json = data_json.unwrap();
 
-    //parsear os dados antigos
-    let old_data_json: Vec<HashMap<String, Value>> =
-        serde_json::from_str(old_data.as_str()).unwrap();
-    //criar uma instância de Configuração com os valores min_novo e min_ativo
-    let configuracao = Configuracao::new(max_novo, max_ativo);
-    //criar uma instância de Peso com os valores do json de peso
-    let pesos = Peso::new_from_strignify(peso);
-    //criar um hashmap para armazenar o critério de bairro
-    let criterios_bairros = get_criterio_bairo(&data_json);
-    //criar um hashmap para armazenar o critério de bairro e tipo de imóvel
-    let criterios_bairros_tipo_imoveis = get_criterio_bairro_tipo_imovel(&data_json);
-    for item in &mut data_json {
-        let bairro = item.get("bairro");
-        if bairro.is_none() {
-            continue;
-        }
-        let bairro = bairro.unwrap().as_str().unwrap();
 
-        let tipo = item.get("tipo");
-        if tipo.is_none() {
-            continue;
-        }
-        let tipo = tipo.unwrap().as_str().unwrap();
-
-        let data_cadastro = item.get("criacao");
-        if data_cadastro.is_none() {
-            continue;
-        }
-
-        let data_cadastro = data_cadastro.unwrap().as_str().unwrap();
-        let data_cadastro = NaiveDate::parse_from_str(data_cadastro, "%d-%m-%Y");
-        if data_cadastro.is_err() {
-            continue;
-        }
-        let data_cadastro = data_cadastro.unwrap();
-
-        let data_atualizacao = item.get("ultimaAtualizacao");
-        if data_atualizacao.is_none() {
-            continue;
-        }
-        let data_atualizacao = data_atualizacao.unwrap().as_str().unwrap();
-        let data_atualizacao = NaiveDate::parse_from_str(data_atualizacao, "%d-%m-%Y");
-        if data_atualizacao.is_err() {
-            continue;
-        }
-        let data_atualizacao = data_atualizacao.unwrap();
-
-        let criterio_bairro = criterios_bairros.get(bairro);
-        if criterio_bairro.is_none() {
-            continue;
-        }
-        let criterio_bairro = criterio_bairro.unwrap();
-
-        let tipo_bairro = format!("{}_{}", tipo, bairro);
-        let criterio_bairro_tipo_imovel = criterios_bairros_tipo_imoveis.get(&tipo_bairro);
-        if criterio_bairro_tipo_imovel.is_none() {
-            continue;
-        }
-        let criterio_bairro_tipo_imovel = criterio_bairro_tipo_imovel.unwrap();
-        let today_naive = chrono::Local::now().date_naive();
-        let novo = data_cadastro
-            > today_naive - chrono::Duration::days(configuracao.maximo_imovel_novo as i64);
-        let atualizado = data_atualizacao
-            > today_naive - chrono::Duration::days(configuracao.maximo_imovel_atualizado as i64);
-        item.insert(
-            "criterio_bairro".to_string(),
-            Value::Number(serde_json::Number::from(*criterio_bairro as i64)),
-        );
-        item.insert(
-            "criterio_bairro_tipo_imovel".to_string(),
-            Value::Number(serde_json::Number::from(
-                *criterio_bairro_tipo_imovel as i64,
-            )),
-        );
-        item.insert("novo".to_string(), Value::Bool(novo));
-        item.insert("atualizado".to_string(), Value::Bool(atualizado));
+    let old_data_json: Result<Vec<HashMap<String, Value>>, serde_json::Error> =
+        serde_json::from_str(old_data.as_str());
+    if old_data_json.is_err() {
+        return Err("Erro ao parsear os dados antigos".to_string());
     }
+    let old_data_json = old_data_json.unwrap();  
+    let peso_obj = Peso::new_from_strignify(peso);
+    let config = get_config();
+    let mut result = Vec::<HashMap<String, Value>>::new();
+    let criterios_bairros = get_criterio_bairro(&data_json);
+    let criterios_bairros_tipo_imoveis = get_criterio_bairro_tipo_imovel(&data_json);
+    let criterios_dormitorio_bairro = get_criterio_dormitorio_bairro(&data_json);
+    let criterios_tipo_bairro_dormitorio = get_criterio_tipo_bairro_dormitorio(&data_json);
+   
 
-    for item in &mut data_json {
-        let mut resultado: HashMap<String, f32> = HashMap::new();
 
-        /***************************************************/
-        /******************Status***************************/
-        let ativo = item.get("status");
-        if ativo.is_none() {
-            resultado.insert("ativo".to_string(), 0.0);
-        }
-        let ativo = ativo.unwrap().as_str();
-        if ativo.is_none() {
-            resultado.insert("ativo".to_string(), 0.0);
-        }
-        let ativo = ativo.unwrap();
-        if ativo.to_lowercase() == "ativo" {
-            resultado.insert("ativo".to_string(), pesos.ativo);
-        } else {
-            resultado.insert("ativo".to_string(), 0.0);
-        }
-        /***************************************************/
-        /******************Tipo e Bairro********************/
-        let cont_tipo_bairro = item.get("criterio_bairro_tipo_imovel");
-        if cont_tipo_bairro.is_none() {
-            resultado.insert("cont_tipo_bairro".to_string(), 0.0);
-        }
+    for (_i, item) in data_json.iter().enumerate() {
 
-        let cont_tipo_bairro = cont_tipo_bairro
-            .unwrap_or(&Value::from(0.0))
-            .as_f64()
-            .unwrap() as f32;
+        let referencia = item.get("referencia").ok_or("Referencia não encontrada".to_string())?;
+        let default_tipo = Value::String("".to_string());
+        let tipo = item.get("tipo").unwrap_or(&default_tipo).as_str().unwrap();
+        let default_bairro = Value::String("".to_string());
+        let bairro = item.get("bairro").unwrap_or(&default_bairro).as_str().unwrap();
+        let dormitorios = item.get("dormitorios").unwrap_or(&Value::from(0)).as_f64().unwrap() as i32;
+        let default_finalidade = Value::String("".to_string());
+        let finalidade = item.get("finalidade").unwrap_or(&default_finalidade).as_str().unwrap();
+        let locacao = item.get("locacao").unwrap_or(&Value::Number(serde_json::Number::from(0))).as_f64().unwrap() as f32;
+        let venda = item.get("venda").unwrap_or(&Value::Number(serde_json::Number::from(0))).as_f64().unwrap() as f32;
+        let tipo_do_anuncio = item.get("tipoDoAnuncio").unwrap_or(&Value::String("".to_string())).as_str().unwrap().to_string();
+        let old_data = old_data_json.iter().find(|x| x.get("referencia").unwrap().as_str().unwrap() == item.get("referencia").unwrap().as_str().unwrap());
+        let mut novo = old_data.is_none();
+        let default_old_data = HashMap::new();
+        let old_data = old_data.unwrap_or(&default_old_data);
 
-        resultado.insert(
-            "cont_tipo_bairro".to_string(),
-            pesos.cont_tipo_bairro * cont_tipo_bairro as f32,
-        );
 
-        /***************************************************/
-        /******************Bairro***************************/
-        let cont_bairro = item
-            .get("criterio_bairro")
-            .unwrap_or(&Value::from(0.0))
-            .as_f64()
-            .unwrap() as f32;
+        //valores que serao calculados com o peso para se fazer o ranking
 
-        resultado.insert(
-            "cont_bairro".to_string(),
-            pesos.cont_bairro * cont_bairro as f32,
-        );
-
-        /***************************************************/
-        /******************Old Items********************/
-        //procurar em old_data_json o item com o mesmo referencia
-        let referencia = item.get("referencia");
-        if referencia.is_none() {
-            resultado.insert("diminuiu_preco".to_string(), 0.0);
-        }
-
-        let referencia = referencia.unwrap().as_str();
-        if referencia.is_none() {
-            resultado.insert("diminuiu_preco".to_string(), 0.0);
-        }
-        let referencia = referencia.unwrap();
-        let old_item =
-            old_data_json
-                .iter()
-                .find(|x| match x.get("referencia").and_then(|v| v.as_str()) {
-                    Some(str) => str == referencia,
-                    None => false,
-                });
-        if old_item.is_none() {
-            resultado.insert("diminuiu_preco".to_string(), 0.0);
-        }
-
-        let old_item = old_item.unwrap();
-        let old_preco_locacao = old_item.get("locacao");
-        if old_preco_locacao.is_none() {
-            resultado.insert("diminuiu_preco".to_string(), 0.0);
-        }
-        let old_preco_locacao = old_preco_locacao.unwrap().as_f64();
-        if old_preco_locacao.is_none() {
-            resultado.insert("diminuiu_preco".to_string(), 0.0);
-        }
-        let old_preco_locacao = old_preco_locacao.unwrap() as f32;
-
-        let old_preco_venda = old_item.get("venda");
-        if old_preco_venda.is_none() {
-            resultado.insert("diminuiu_preco".to_string(), 0.0);
-        }
-        let old_preco_venda = old_preco_venda.unwrap().as_f64();
-        if old_preco_venda.is_none() {
-            resultado.insert("diminuiu_preco".to_string(), 0.0);
-        }
-        let old_preco_venda = old_preco_venda.unwrap() as f32;
-        /************************************************************************************/
-        /******************************Comparações*******************************************/
-
-        let preco_locacao = item.get("locacao");
-        if preco_locacao.is_none() {
-            resultado.insert("diminuiu_preco".to_string(), 0.0);
-        }
-        let preco_locacao = preco_locacao.unwrap().as_f64();
-        if preco_locacao.is_none() {
-            resultado.insert("diminuiu_preco".to_string(), 0.0);
-        }
-        let preco_locacao = preco_locacao.unwrap() as f32;
-
-        let preco_venda = item.get("venda");
-        if preco_venda.is_none() {
-            resultado.insert("diminuiu_preco".to_string(), 0.0);
-        }
-        let preco_venda = preco_venda.unwrap().as_f64();
-        if preco_venda.is_none() {
-            resultado.insert("diminuiu_preco".to_string(), 0.0);
-        }
-        let preco_venda = preco_venda.unwrap() as f32;
-
-        if preco_locacao < old_preco_locacao || preco_venda < old_preco_venda {
-            resultado.insert("diminuiu_preco".to_string(), pesos.diminuiu_preco);
-        } else {
-            resultado.insert("diminuiu_preco".to_string(), 0.0);
-        }
-
-        /***************************************************/
-        /******************Visualizações********************/
-        let visualizacoes = item.get("visualizacoes");
-        if visualizacoes.is_none() {
-            resultado.insert("visualizacoes".to_string(), 0.0);
-        }
-        let visualizacoes = visualizacoes.unwrap().as_f64();
-        if visualizacoes.is_none() {
-            resultado.insert("visualizacoes".to_string(), 0.0);
-        }
-
-        let visualizacoes = visualizacoes.unwrap();
-        resultado.insert(
-            "visualizacoes".to_string(),
-            pesos.visualizacoes * visualizacoes as f32,
-        );
-
-        /***************************************************/
-        /******************Novo*****************************/
-        let novo = item.get("novo");
-        if novo.is_none() {
-            resultado.insert("novo".to_string(), 0.0);
-        }
-        let novo = novo.unwrap_or(&Value::Bool(false)).as_bool().unwrap();
+        let venda_antigo;
+        let locacao_antigo;
 
         if novo {
-            resultado.insert("novo".to_string(), pesos.novo);
-        } else {
-            resultado.insert("novo".to_string(), 0.0);
+            venda_antigo = venda;
+            locacao_antigo = locacao;           
+        }
+        else{
+            venda_antigo = old_data.get("venda").unwrap().as_f64().unwrap() as f32;
+            locacao_antigo = old_data.get("locacao").unwrap().as_f64().unwrap() as f32;
         }
 
-        /***************************************************/
-        /******************Atualizado***********************/
-        let atualizado = item.get("atualizado");
-        if atualizado.is_none() {
-            resultado.insert("atualizado".to_string(), 0.0);
+        let variacao_venda = venda_antigo - venda;
+        let variacao_locacao = locacao_antigo - locacao;
+        let criacao = item.get("criacao").unwrap().as_str().unwrap();
+        let max_novo = config.get("maxDiasNovo");
+        if max_novo.is_none() {
+            return Err("Erro ao obter o valor de maxDiasNovo".to_string());
         }
-        let atualizado = atualizado.unwrap_or(&Value::Bool(false)).as_bool().unwrap();
+        let max_novo = max_novo.unwrap();
+        let max_novo = max_novo.as_str().unwrap();       
+        let max_novo = max_novo.parse::<i32>().unwrap();
+        let criacao_date = NaiveDate::parse_from_str(criacao, "%d/%m/%Y");
+        let criacao_date = match criacao_date {
+            Ok(date) => date,
+            Err(error) => return Err(error.to_string())
+        };
+        let recentemente_criado = criacao_date > chrono::Local::now().date_naive() - chrono::Duration::days(max_novo as i64);
 
-        if atualizado {
-            resultado.insert("atualizado".to_string(), pesos.atualizado);
-        } else {
-            resultado.insert("atualizado".to_string(), 0.0);
-        }
+        println!("{:?}",criacao_date);
+        
+        novo = novo || recentemente_criado;
+        let venda_por_m2 = item.get("vendaPorM2")
+            .unwrap_or(&Value::Number(serde_json::Number::from(0)))
+            .as_f64().unwrap_or(0.0) as f32;
+        let locacao_por_m2 = item.get("locacaoPorM2")
+            .unwrap_or(&Value::Number(serde_json::Number::from(0)))
+            .as_f64().unwrap_or(0.0) as f32;
+        let visualizacoes = item.get("visualizacoes")
+            .unwrap_or(&Value::Number(serde_json::Number::from(0)))
+            .as_f64().unwrap_or(0.0) as f32;
+        let contatos = item.get("contatos")
+            .unwrap_or(&Value::Number(serde_json::Number::from(0)))
+            .as_f64().unwrap_or(0.0) as f32;
+        let num_visitas = item.get("numVisitas")
+            .unwrap_or(&Value::Number(serde_json::Number::from(0)))
+            .as_f64().unwrap_or(0.0) as f32;
+        let criterio_bairro = criterios_bairros.get(bairro).unwrap();
+        let criterio_tipo_bairro = criterios_bairros_tipo_imoveis.get(&format!("{}_{}", tipo, bairro)).unwrap();
+        let criterio_dormitorio_bairro = criterios_dormitorio_bairro.get(&format!("{}_{}", dormitorios, bairro)).unwrap();
+        let criterio_tipo_bairro_dormitorios = criterios_tipo_bairro_dormitorio.get(&format!("{}_{}_{}", tipo, bairro, dormitorios)).unwrap();
+        
+        
+        
+        let calculo_variacao_venda = peso_obj.diminuiu_preco * variacao_venda;
+        let calculo_variacao_locacao = peso_obj.diminuiu_preco * variacao_locacao;
+        let calculo_novo = match novo {
+            true => peso_obj.novo,
+            false => 0.0,
+        };
+        let calculo_venda_por_m2 = peso_obj.venda_por_m2 * venda_por_m2;
+        let calculo_locacao_por_m2 = peso_obj.locacao_por_m2 * locacao_por_m2;
+        let calculo_visualizacoes = peso_obj.visualizacoes * visualizacoes;
+        let calculo_contatos = peso_obj.contatos * contatos;
+        let calculo_visitas = peso_obj.visitas * num_visitas;
+        let calculo_criterio_bairro = peso_obj.cont_bairro * criterio_bairro;
+        let calculo_criterio_tipo_bairro = peso_obj.cont_tipo_bairro * criterio_tipo_bairro;
+        let calculo_criterio_dormitorio_bairro = peso_obj.cont_dormitorio_bairro * criterio_dormitorio_bairro;
+        let calculo_criterio_tipo_bairro_dormitorios = peso_obj.cont_tipo_bairro_dormitorio * criterio_tipo_bairro_dormitorios;
+        let resultado = calculo_variacao_venda 
+                            + calculo_variacao_locacao 
+                            + calculo_novo 
+                            + calculo_venda_por_m2 
+                            + calculo_locacao_por_m2 
+                            + calculo_visualizacoes 
+                            + calculo_contatos 
+                            + calculo_visitas 
+                            + calculo_criterio_bairro 
+                            + calculo_criterio_tipo_bairro 
+                            + calculo_criterio_dormitorio_bairro 
+                            + calculo_criterio_tipo_bairro_dormitorios;
 
-        /***************************************************/
-        /******************Contatos*************************/
-        let contatos = item.get("contatos");
-        if contatos.is_none() {
-            resultado.insert("contatos".to_string(), 0.0);
-        }
+        let mut result_item:HashMap<String,Value> = HashMap::new();
+        result_item.insert("referencia".to_string(), Value::String(referencia.to_string()));
+        result_item.insert("tipo".to_string(), Value::String(tipo.to_string()));
+        result_item.insert("bairro".to_string(), Value::String(bairro.to_string()));
+        result_item.insert("dormitorios".to_string(), Value::Number(serde_json::Number::from(dormitorios)));
+        result_item.insert("finalidade".to_string(), Value::String(finalidade.to_string()));
+        result_item.insert("tipoDoAnuncio".to_string(), Value::String(tipo_do_anuncio.to_string()));
+        result_item.insert("novo".to_string(), Value::Bool(novo));
+        result_item.insert("resultado".to_string(), Value::Number(serde_json::Number::from_f64(resultado as f64).unwrap()));
 
-        let contatos = contatos.unwrap().as_f64();
-        if contatos.is_none() {
-            resultado.insert("contatos".to_string(), 0.0);
-        }
-        let contatos = contatos.unwrap();
-        resultado.insert("contatos".to_string(), pesos.contatos * contatos as f32);
+        result.push(result_item);
 
-        /***************************************************/
-        /******************Visitas*************************/
 
-        let visitas = item.get("numVisitas");
-        if visitas.is_none() {
-            resultado.insert("visitas".to_string(), 0.0);
-        }
-        let visitas = visitas.unwrap().as_f64();
-        if visitas.is_none() {
-            resultado.insert("visitas".to_string(), 0.0);
-        }
-        let visitas = visitas.unwrap();
-        resultado.insert("visitas".to_string(), pesos.visitas * visitas as f32);
 
-        /***************************************************/
-        /******************Visitas Concluídas****************/
 
-        let visitas_concluidas = item.get("visitasConcluidas");
-        if visitas_concluidas.is_none() {
-            resultado.insert("visitas_concluidas".to_string(), 0.0);
-        }
-        let visitas_concluidas = visitas_concluidas.unwrap().as_f64();
-        if visitas_concluidas.is_none() {
-            resultado.insert("visitas_concluidas".to_string(), 0.0);
-        }
-        let visitas_concluidas = visitas_concluidas.unwrap();
-
-        resultado.insert(
-            "visitas_concluidas".to_string(),
-            pesos.visitas_concluidas * visitas_concluidas as f32,
-        );
-
-        /***************************************************/
-        /******************Visitas Canceladas****************/
-        let visitas_canceladas = item.get("visitasCanceladas");
-        if visitas_canceladas.is_none() {
-            resultado.insert("visitas_canceladas".to_string(), 0.0);
-        }
-        let visitas_canceladas = visitas_canceladas.unwrap().as_f64();
-        if visitas_canceladas.is_none() {
-            resultado.insert("visitas_canceladas".to_string(), 0.0);
-        }
-        let visitas_canceladas = visitas_canceladas.unwrap();
-        resultado.insert(
-            "visitas_canceladas".to_string(),
-            pesos.visitas_canceladas * visitas_canceladas as f32,
-        );
-
-        /***************************************************/
-        /******************Visitas Aguardando****************/
-        let visitas_aguardando = item.get("visitasAguardando");
-        if visitas_aguardando.is_none() {
-            resultado.insert("visitas_aguardando".to_string(), 0.0);
-        }
-        let visitas_aguardando = visitas_aguardando.unwrap().as_f64();
-        if visitas_aguardando.is_none() {
-            resultado.insert("visitas_aguardando".to_string(), 0.0);
-        }
-        let visitas_aguardando = visitas_aguardando.unwrap();
-        resultado.insert(
-            "visitas_aguardando".to_string(),
-            pesos.visitas_aguardando * visitas_aguardando as f32,
-        );
-
-        /***************************************************/
-        /******************Interessou***********************/
-        let interessou = item.get("interessou");
-        if interessou.is_none() {
-            resultado.insert("interessou".to_string(), 0.0);
-        }
-        let interessou = interessou.unwrap().as_f64();
-        if interessou.is_none() {
-            resultado.insert("interessou".to_string(), 0.0);
-        }
-        let interessou = interessou.unwrap();
-        resultado.insert(
-            "interessou".to_string(),
-            pesos.interessou * interessou as f32,
-        );
-
-        /***************************************************/
-        /******************Interessou Gerou Proposta********/
-
-        let interessou_gerou_proposta = item.get("interessouGerouProposta");
-        if interessou_gerou_proposta.is_none() {
-            resultado.insert("interessou_gerou_proposta".to_string(), 0.0);
-        }
-        let interessou_gerou_proposta = interessou_gerou_proposta.unwrap().as_f64();
-        if interessou_gerou_proposta.is_none() {
-            resultado.insert("interessou_gerou_proposta".to_string(), 0.0);
-        }
-        let interessou_gerou_proposta = interessou_gerou_proposta.unwrap();
-        resultado.insert(
-            "interessou_gerou_proposta".to_string(),
-            pesos.interessou_gerou_proposta * interessou_gerou_proposta as f32,
-        );
-
-        /***************************************************/
-        /******************Total Conservação****************/
-        let total_conservacao = item.get("totalConservacao");
-        if total_conservacao.is_none() {
-            resultado.insert("total_conservacao".to_string(), 0.0);
-        }
-        let total_conservacao = total_conservacao.unwrap().as_f64();
-        if total_conservacao.is_none() {
-            resultado.insert("total_conservacao".to_string(), 0.0);
-        }
-        let total_conservacao = total_conservacao.unwrap();
-        resultado.insert(
-            "total_conservacao".to_string(),
-            pesos.total_conservacao * total_conservacao as f32,
-        );
-
-        /***************************************************/
-        /******************Media Conservação****************/
-        let media_conservacao = item.get("mediaConservacao");
-        if media_conservacao.is_none() {
-            resultado.insert("media_conservacao".to_string(), 0.0);
-        }
-        let media_conservacao = media_conservacao.unwrap().as_f64();
-        if media_conservacao.is_none() {
-            resultado.insert("media_conservacao".to_string(), 0.0);
-        }
-        let media_conservacao = media_conservacao.unwrap();
-        resultado.insert(
-            "media_conservacao".to_string(),
-            pesos.media_conservacao * media_conservacao as f32,
-        );
-
-        /***************************************************/
-        /******************Total Localização****************/
-        let total_localizacao = item.get("totalLocalizacao");
-        if total_localizacao.is_none() {
-            resultado.insert("total_localizacao".to_string(), 0.0);
-        }
-        let total_localizacao = total_localizacao.unwrap().as_f64();
-        if total_localizacao.is_none() {
-            resultado.insert("total_localizacao".to_string(), 0.0);
-        }
-        let total_localizacao = total_localizacao.unwrap();
-        resultado.insert(
-            "total_localizacao".to_string(),
-            pesos.total_localizacao * total_localizacao as f32,
-        );
-
-        /***************************************************/
-        /******************Media Localização****************/
-        let media_localizacao = item.get("mediaLocalizacao");
-        if media_localizacao.is_none() {
-            resultado.insert("media_localizacao".to_string(), 0.0);
-        }
-        let media_localizacao = media_localizacao.unwrap().as_f64();
-        if media_localizacao.is_none() {
-            resultado.insert("media_localizacao".to_string(), 0.0);
-        }
-        let media_localizacao = media_localizacao.unwrap();
-        resultado.insert(
-            "media_localizacao".to_string(),
-            pesos.media_localizacao * media_localizacao as f32,
-        );
-
-        /***************************************************/
-        /******************Total Avaliação******************/
-
-        let total_avaliacao = item.get("totalAvaliacao");
-        if total_avaliacao.is_none() {
-            resultado.insert("total_avaliacao".to_string(), 0.0);
-        }
-        let total_avaliacao = total_avaliacao.unwrap().as_f64();
-        if total_avaliacao.is_none() {
-            resultado.insert("total_avaliacao".to_string(), 0.0);
-        }
-        let total_avaliacao = total_avaliacao.unwrap();
-        resultado.insert(
-            "total_avaliacao".to_string(),
-            pesos.total_avaliacao * total_avaliacao as f32,
-        );
-
-        /***************************************************/
-        /******************Media Avaliação******************/
-        let media_avaliacao = item.get("mediaAvaliacao");
-        if media_avaliacao.is_none() {
-            resultado.insert("media_avaliacao".to_string(), 0.0);
-        }
-        let media_avaliacao = media_avaliacao.unwrap().as_f64();
-        if media_avaliacao.is_none() {
-            resultado.insert("media_avaliacao".to_string(), 0.0);
-        }
-        let media_avaliacao = media_avaliacao.unwrap();
-        resultado.insert(
-            "media_avaliacao".to_string(),
-            pesos.media_avaliacao * media_avaliacao as f32,
-        );
-
-        /***************************************************/
-        /******************Avaliação Subjetiva**************/
-        let avaliacao_subjetiva = item.get("avaliacaoSubjetiva");
-        if avaliacao_subjetiva.is_none() {
-            resultado.insert("avaliacao_subjetiva".to_string(), 0.0);
-        }
-        let avaliacao_subjetiva = avaliacao_subjetiva.unwrap().as_f64();
-        if avaliacao_subjetiva.is_none() {
-            resultado.insert("avaliacao_subjetiva".to_string(), 0.0);
-        }
-        let avaliacao_subjetiva = avaliacao_subjetiva.unwrap();
-        resultado.insert(
-            "avaliacao_subjetiva".to_string(),
-            pesos.avaliacao_subjetiva * avaliacao_subjetiva as f32,
-        );
-        /************************************************************************************/
-        /******************************Venda Por M2******************************************/
-        let venda_por_m2 = item.get("vendaPorM2");
-        if venda_por_m2.is_none() {
-            resultado.insert("venda_por_m2".to_string(), 0.0);
-        }
-
-        let venda_por_m2 = venda_por_m2.unwrap();
-
-        let venda_por_m2 = venda_por_m2.as_f64();
-        if venda_por_m2.is_none() {
-            resultado.insert("venda_por_m2".to_string(), 0.0);
-        }
-        let venda_por_m2 = venda_por_m2.unwrap_or(0.0);
-        resultado.insert(
-            "venda_por_m2".to_string(),
-            pesos.venda_por_m2 * venda_por_m2 as f32,
-        );
-
-        /************************************************************************************/
-        /******************************Locação Por M2******************************************/
-
-        let locacao_por_m2 = item.get("locacaoPorM2");
-        if locacao_por_m2.is_none() {
-            resultado.insert("locacao_por_m2".to_string(), 0.0);
-        }
-        let locacao_por_m2 = locacao_por_m2.unwrap().as_f64();
-        if locacao_por_m2.is_none() {
-            resultado.insert("locacao_por_m2".to_string(), 0.0);
-        }
-        let locacao_por_m2 = locacao_por_m2.unwrap_or(0.0);
-        resultado.insert(
-            "locacao_por_m2".to_string(),
-            pesos.locacao_por_m2 * locacao_por_m2 as f32,
-        );
-
-        let mut resultado_final = 0.0;
-        for (_, value) in resultado {
-            resultado_final += value;
-        }
-
-        item.insert(
-            "resultado".to_string(),
-            Value::Number(serde_json::Number::from_f64(resultado_final as f64).unwrap()),
-        );
     }
+
+    
     //ordene os dados por resultado
-    data_json.sort_by(|a, b| {
+    result.sort_by(|a, b| {
         let a = a.get("resultado").unwrap().as_f64().unwrap();
         let b = b.get("resultado").unwrap().as_f64().unwrap();
         return b.partial_cmp(&a).unwrap();
     });
 
     //retorne os dados ordenados
-    return Ok(serde_json::to_string(&data_json).unwrap());
-}
 
+    let res = serde_json::to_string(&result).unwrap();
+
+
+    return Ok(res)
+
+
+
+
+    
+}
+#[tauri::command]
+fn compila_dados(data:String)->Vec<HashMap<String, f32>>{
+    let data_json = serde_json::from_str(data.as_str()).unwrap();
+    let mut result = Vec::<HashMap<String, f32>>::new();
+    let criterio_bairro = get_criterio_bairro(&data_json);
+    let criterio_bairro_tipo_imovel = get_criterio_bairro_tipo_imovel(&data_json);
+    let criterio_dormitorio_bairro = get_criterio_dormitorio_bairro(&data_json);
+    let criterio_tipo_bairro_dormitorio = get_criterio_tipo_bairro_dormitorio(&data_json);
+
+    result.push(criterio_bairro);
+    result.push(criterio_bairro_tipo_imovel);
+    result.push(criterio_dormitorio_bairro);
+    result.push(criterio_tipo_bairro_dormitorio);
+
+
+    result
+
+    
+}
 fn main() {
+    
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             read_excel_to_hash_vector,
             read_sheet_to_hash_vector,
             get_sheets_names,
             get_mouse_position,
+            save_xlsx,
             classify,
-            save_xlsx
+            compila_dados
+    
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
