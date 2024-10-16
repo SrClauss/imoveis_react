@@ -4,13 +4,10 @@ mod xlsx;
 use chrono::NaiveDate;
 use mouse_rs::Mouse;
 use serde_json::Value;
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-};
+use std::collections::{HashMap, HashSet};
 use tauri::{api::path::app_local_data_dir, utils::config};
 use xlsx::xlsx::{
-    get_sheets_names, read_excel_to_hash_vector, read_sheet_to_hash_vector, save_xlsx,
+    get_sheets_names, read_excel_to_hash_vector, read_sheet_to_hash_vector, save_xlsx, save_xlsx_ranking
 };
 #[derive(Debug)]
 struct Peso {
@@ -28,6 +25,10 @@ struct Peso {
     venda_por_m2: f32,//peso para o criterio venda_por_m2
     locacao_por_m2: f32,//peso para o criterio locacao_por_m2
 }
+
+
+
+
 impl Peso {
     fn new_from_strignify(json_str: String) -> Self {
         let json: Value = serde_json::from_str(json_str.as_str()).unwrap();
@@ -433,10 +434,12 @@ fn classify(data: String, old_data: String, peso: String) -> Result<String, Stri
     let criterios_bairros = get_criterio_bairro(&data_json);
     let criterios_bairros_tipo_imoveis = get_criterio_bairro_tipo_imovel(&data_json);
     let criterios_dormitorio_bairro = get_criterio_dormitorio_bairro(&data_json);
+
     let criterios_tipo_bairro_dormitorio = get_criterio_tipo_bairro_dormitorio(&data_json);
     let criterios_tipo = get_criterio_tipo(&data_json);
     let criterios_tipo_dormitorio = get_criterio_tipo_dormitorio(&data_json);
     for (_i, item) in data_json.iter().enumerate() {
+      
         let referencia = item
             .get("referencia")
             .ok_or("Referencia não encontrada".to_string())?;
@@ -453,6 +456,8 @@ fn classify(data: String, old_data: String, peso: String) -> Result<String, Stri
             .unwrap_or(&Value::from(0))
             .as_f64()
             .unwrap() as i32;
+        let endereco = item.get("endereco").unwrap().as_str().unwrap();
+
         let default_finalidade = Value::String("".to_string());
         let finalidade = item
             .get("finalidade")
@@ -479,23 +484,18 @@ fn classify(data: String, old_data: String, peso: String) -> Result<String, Stri
             x.get("referencia").unwrap().as_str().unwrap()
                 == item.get("referencia").unwrap().as_str().unwrap()
         });
-        let mut novo = old_data.is_none();
-        let default_old_data = HashMap::new();
-        let old_data = old_data.unwrap_or(&default_old_data);
-
-        //valores que serao calculados com o peso para se fazer o ranking
-
         let venda_antigo;
         let locacao_antigo;
-
-        if novo {
+        if old_data.is_none() {
             venda_antigo = venda;
-            locacao_antigo = locacao;
-        } else {
-            venda_antigo = old_data.get("venda").unwrap().as_f64().unwrap() as f32;
-            locacao_antigo = old_data.get("locacao").unwrap().as_f64().unwrap() as f32;
+            locacao_antigo = locacao;          
+        }
+        else {
+            venda_antigo = old_data.unwrap().get("venda").unwrap().as_f64().unwrap() as f32;
+            locacao_antigo = old_data.unwrap().get("locacao").unwrap().as_f64().unwrap() as f32;
         }
 
+      
         let variacao_venda = venda_antigo - venda;
         let variacao_locacao = locacao_antigo - locacao;
         let criacao = item.get("criacao").unwrap().as_str().unwrap();
@@ -511,12 +511,12 @@ fn classify(data: String, old_data: String, peso: String) -> Result<String, Stri
             Ok(date) => date,
             Err(error) => return Err(error.to_string()),
         };
-        let recentemente_criado = criacao_date
+        let novo = criacao_date
             > chrono::Local::now().date_naive() - chrono::Duration::days(max_novo as i64);
 
-        println!("{:?}", criacao_date);
 
-        novo = novo || recentemente_criado;
+
+        
         let venda_por_m2 = item
             .get("vendaPorM2")
             .unwrap_or(&Value::Number(serde_json::Number::from(0)))
@@ -547,15 +547,14 @@ fn classify(data: String, old_data: String, peso: String) -> Result<String, Stri
             .get(&format!("{}_{}", tipo, bairro))
             .unwrap();
         let criterio_dormitorio_bairro = criterios_dormitorio_bairro
-            .get(&format!("{}_{}", dormitorios, bairro))
-            .unwrap();
+            .get(&format!("{}_{}", dormitorios, bairro)).unwrap_or(&0.0);
+        
         let criterio_tipo_bairro_dormitorios = criterios_tipo_bairro_dormitorio
-            .get(&format!("{}_{}_{}", tipo, bairro, dormitorios))
-            .unwrap();
+            .get(&format!("{}_{}_{}", tipo, bairro, dormitorios)).unwrap_or(&0.0);
         let criterio_tipo = criterios_tipo.get(tipo).unwrap();
         let criterio_tipo_dormitorio = criterios_tipo_dormitorio
             .get(&format!("{}_{}", tipo, dormitorios))
-            .unwrap();
+            .unwrap_or(&0.0);
         let calculo_variacao_venda = peso_obj.diminuiu_preco * variacao_venda;
         let calculo_variacao_locacao = peso_obj.diminuiu_preco * variacao_locacao;
         let calculo_novo = match novo {
@@ -610,6 +609,9 @@ fn classify(data: String, old_data: String, peso: String) -> Result<String, Stri
             Value::String(tipo_do_anuncio.to_string()),
         );
         result_item.insert("novo".to_string(), Value::Bool(novo));
+        result_item.insert("endereco".to_string(), Value::String(endereco.to_string()));
+        result_item.insert("venda".to_string(), Value::Number(serde_json::Number::from_f64(venda as f64).unwrap()));
+        result_item.insert("locacao".to_string(), Value::Number(serde_json::Number::from_f64(locacao as f64).unwrap()));
         result_item.insert(
             "resultado".to_string(),
             Value::Number(serde_json::Number::from_f64(resultado as f64).unwrap()),
@@ -659,6 +661,7 @@ fn main() {
             get_sheets_names,
             get_mouse_position,
             save_xlsx,
+            save_xlsx_ranking,
             classify,
             compila_dados
         ])

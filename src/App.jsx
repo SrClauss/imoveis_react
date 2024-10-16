@@ -7,6 +7,8 @@ import { NavigationProvider, NavigationContext } from "./NavigationContext";
 import { ThemeProvider } from "@mui/material";
 import { createTheme } from "@mui/material/styles";
 import DashBoard from "./Pages/DashBoard";
+import TabelaDinamica from "./Pages/TabelaDinamica";
+import  LicenseProvider from "./LicenseContext";
 
 const theme = createTheme( {
   palette: {
@@ -34,16 +36,21 @@ export default function App() {
         return <MainScreen />;
       case "DashBoard":
         return <DashBoard />;
+
+      case "TabelaDinamica":
+        return <TabelaDinamica />;
       default:
         return <MainScreen />;
     }
   };
 
   return (
+    <LicenseProvider>
     <ThemeProvider theme={theme}>
       <NavigationProvider>
         <ScreenRenderer />
       </NavigationProvider>
     </ThemeProvider>
+    </LicenseProvider>
   );
 }

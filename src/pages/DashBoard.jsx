@@ -6,10 +6,11 @@ import { dialog, fs } from "@tauri-apps/api";
 import { appLocalDataDir, localDataDir } from "@tauri-apps/api/path";
 import { ExpandMore } from "@mui/icons-material";
 import PesosForm from "../Components/PesosForm";
+
 const WIDTH = 600;
 const HEIGTH = 200;
 export default function DashBoard() {
-  const { sharedState } = useContext(NavigationContext);
+  const { sharedState, setActiveScreen } = useContext(NavigationContext);
   const [pesos, setPesos] = useState({
     cont_tipo_bairro_dormitorio: "",
     cont_tipo_bairro: "",
@@ -30,16 +31,30 @@ export default function DashBoard() {
     maxDiasAtualizado: "",
     superAnuncios: "",
     anunciosDestacados: "",
-    totalAnuncios: "",
     anunciosPadroes: "",
   });
+
+  const [saveDisabled, setSaveDisabled] = useState(true);
   const handleSaveConfig = () => {
     appLocalDataDir().then((dir) => {
-      fs.writeTextFile(`${dir}config.json`, JSON.stringify({ pesos, config }));
+      fs.writeTextFile(`${dir}config.json`, JSON.stringify({ pesos, config })).then(() => {
+        dialog.message("Configurações salvas com sucesso", {title: "Sucesso"});
+        setSaveDisabled(true);
+      }).catch((err) => {
+
+        dialog.message({title: "Erro", message: err.message
+
+        });
+
+      });
     }).catch((err) => {
       dialog.message({title: "Erro", message: err.message});
     })
     ;
+  };
+  const handleEditConfig = () => {
+
+    setSaveDisabled(false);
   };
 
 
@@ -49,7 +64,6 @@ export default function DashBoard() {
   useEffect(() => {
     appLocalDataDir().then((dir) => {
       fs.readTextFile(`${dir}config.json`).then((config) => {
-        console.log(JSON.parse(config));
         setPesos(JSON.parse(config).pesos);
         setConfig(JSON.parse(config).config);
       });
@@ -301,12 +315,30 @@ export default function DashBoard() {
         </div>
         </AccordionDetails>
       </Accordion>
+      
       </div>
-      <PesosForm pesos={pesos} setPesos={setPesos} config={config} setConfig={setConfig} />
+      <PesosForm pesos={pesos} setPesos={setPesos} config={config} setConfig={setConfig} disabled={saveDisabled} />
 
-      <Card className="p-5">
+      <Card className="flex flex-col p-5 m-5 gap-2">
+        <div>
+          <Button fullWidth variant="contained" onClick={saveDisabled? handleEditConfig: handleSaveConfig }>
+            {
+
+              saveDisabled ? "Editar Configurações" : "Salvar Configurações"
+            }
+          </Button>
+        </div>
+        <div>
+          <Button fullWidth variant="contained" onClick={() => setActiveScreen("MainScreen")}>Voltar</Button>
+
+        </div>
+
+        <div>
+          <Button fullWidth variant="contained" onClick={() => setActiveScreen("TabelaDinamica")}>Tabela Dinâmica</Button>
+        </div>
         
-        </Card>
+        
+      </Card>
     </div>
   );
 }

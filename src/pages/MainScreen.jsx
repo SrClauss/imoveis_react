@@ -15,6 +15,9 @@ export default function MainScreen({onGetParams}) {
   const [dataAnuncios, setDataAnuncios] = useState([]);
   const [dataArquivoAntigo, setDataArquivoAntigo] = useState([]);
   const [processedData, setProcessedData] = useState({});
+  const [nextEnabled, setNextEnabled] = useState(false);
+
+
   
 
 
@@ -36,6 +39,7 @@ export default function MainScreen({onGetParams}) {
 
       );
 
+
       invoke("compila_dados", { data: JSON.stringify(compiledData) }).then(
         (response) => {
           setProcessedData({
@@ -45,6 +49,7 @@ export default function MainScreen({onGetParams}) {
           })
         }
       );
+      setNextEnabled(true);
 
     }
   }, [dataImoveis, dataVisitas, dataAnuncios]);
@@ -94,6 +99,7 @@ export default function MainScreen({onGetParams}) {
         fullWidth
         variant="contained"
         color="primary"
+        disabled={!nextEnabled}
 
         onClick={() => {
           setSharedState({dataArquivoAntigo, processedData});

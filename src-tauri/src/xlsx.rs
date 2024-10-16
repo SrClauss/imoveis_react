@@ -75,8 +75,75 @@ pub mod xlsx {
             return InputType::String(string);
         }
     }
-   
+   #[tauri::command]
+    pub fn save_xlsx_ranking(data: String, path: String) -> Result<(), String>{
 
+
+
+        let data_json: Result<Vec<HashMap<String, Value>>, serde_json::Error> = serde_json::from_str(data.as_str());
+        if let Err(_) = data_json {
+            return Err("Erro ao parsear os dados".to_string());
+        }
+        let data_json = data_json.unwrap();
+
+        if data_json.is_empty() {
+            return Err("Nenhum dado encontrado".to_string());
+        }
+        let workbook = Workbook::new(path.as_str()).unwrap();
+        
+        let mut worksheet = workbook.add_worksheet(Some("Ranking")).unwrap();
+        
+        let headers = vec![
+            "ranking", "referencia", "tipo", "bairro", "dormitorios", "finalidade", 
+            "tipoDoAnuncio", "endereco", "venda", "locacao", "novo", "resultado"
+        ];
+        
+        // Definindo a largura das colunas
+        let col_widths = vec![
+            8, 10, 15, 15, 10, 12, 20, 40, 12, 12, 12, 10
+        ];
+        
+        for (i, width) in col_widths.iter().enumerate() {
+            worksheet.set_column(i as u16, i as u16, *width as f64, None).unwrap();
+        }
+        
+        for (i, header) in headers.iter().enumerate() {
+            worksheet.write_string(0, i as u16, &convert_camel_case_to_string(&header), Some(&Format::new().set_bold())).unwrap();
+        }
+        
+        let data_json_len = data_json.len();    
+        for i in 1..(data_json_len + 1) {
+            let item = &data_json[i - 1];
+        
+            for (j, header) in headers.iter().enumerate() {
+                let value = item.get(*header).unwrap();               
+                match value {
+                    Value::String(str) => {
+                        worksheet.write_string(i as u32, j as u16, str.as_str(), None).unwrap();
+                    }
+                    Value::Number(num) => {
+                        worksheet.write_number(i as u32, j as u16, num.as_f64().unwrap(), None).unwrap();
+                    }
+                    Value::Bool(b) => {
+                        worksheet.write_boolean(i as u32, j as u16, *b, None).unwrap();
+                    }
+                    _ => {
+                        worksheet.write_blank(i as u32, j as u16, None).unwrap();
+                    }
+                }
+            }
+        }
+        let save_result = workbook.close();
+
+        if let Err(_) = save_result {
+            return Err("Erro ao salvar o arquivo".to_string());
+        }
+        Ok(())
+
+
+
+
+    }
 
     #[tauri::command]
     pub fn save_xlsx(data: String, path: String) -> Result<(), String>{
